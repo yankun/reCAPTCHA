@@ -23,24 +23,50 @@ class KReCaptchaForm extends KUserDefinedFormField{
             return false;
         }
 
+        $url = 'https://www.google.com/recaptcha/api/siteverify';
         $params = array(
             'secret' => K_RECAPTCHA_SECRET_KEY,
             'response' => $_REQUEST['g-recaptcha-response'],
             'remoteip' => $_SERVER['REMOTE_ADDR'],
         );
 
-        $peer_key = version_compare( PHP_VERSION, '5.6.0', '<' ) ? 'CN_name' : 'peer_name';
-        $options = array(
-            'http' => array(
-                'header' => "Content-type: application/x-www-form-urlencoded\r\n",
-                'method' => 'POST',
-                'content' => http_build_query( $params ),
-                'verify_peer' => true,
-                $peer_key => 'www.google.com',
-            ),
-        );
-        $context = stream_context_create( $options );
-        $response = @file_get_contents( 'https://www.google.com/recaptcha/api/siteverify', false, $context );
+        if( extension_loaded('curl') ){
+            $ch = curl_init();
+
+            $options = array(
+                CURLOPT_URL => $url,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query( $params ),
+                CURLOPT_HTTPHEADER => array(
+                    'Content-Type: application/x-www-form-urlencoded'
+                ),
+                CURLINFO_HEADER_OUT => false,
+                CURLOPT_HEADER => false,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => true,
+            );
+
+            foreach( $options as $k=>$v ){
+                curl_setopt( $ch, $k, $v );
+            }
+
+            $response = curl_exec( $ch );
+            curl_close( $ch );
+        }
+        else{
+            $peer_key = version_compare( PHP_VERSION, '5.6.0', '<' ) ? 'CN_name' : 'peer_name';
+            $options = array(
+                'http' => array(
+                    'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+                    'method' => 'POST',
+                    'content' => http_build_query( $params ),
+                    'verify_peer' => true,
+                    $peer_key => 'www.google.com',
+                ),
+            );
+            $context = stream_context_create( $options );
+            $response = @file_get_contents( $url, false, $context );
+        }
 
         if( $response!==false ){
             $response = json_decode( $response, true );
